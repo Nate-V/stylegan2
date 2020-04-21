@@ -85,6 +85,8 @@ class StyleGAN():
         self.generator = self.build_generator()
         self.discriminator = self.build_discriminator()
         
+        # Discriminator Computational Graph
+        
         # freeze generator layers while training discriminator
         self.generator.trainable = False
         
@@ -107,9 +109,22 @@ class StyleGAN():
         partial_gp_loss = partial(gradient_penalty, averaged_samples=interpolated_img, weight=50)
         partial_gp_loss.__name__ = 'gradient_penalty'
         
-        self.discriminator = Model(inputs=[real_img, z], outputs=[valid, fake, valid_interpolated])
-        self.discriminator.compile(optimizer=optimizer, loss=['mse', 'mse', partial_gp_loss], loss_weights=[1, 1, 10])
+        self.discriminator_model = Model(inputs=[real_img, z], outputs=[valid, fake, valid_interpolated])
+        self.discriminator_model.compile(optimizer=optimizer, loss=['mse', 'mse', partial_gp_loss], loss_weights=[1, 1, 10])
         
+        # Generator Computational Graph
+        self.discriminator.trainable = False
+        self.generator.trainable = True
+        
+        # latent vector
+        z_gen = Input(shape=(self.latent_size))
+        # generate image based on vector
+        gen_img = self.generator(z)
+        # discriminator determines validity
+        valid = self.discriminator(gen_img)
+        # define generator model
+        self.generator_model = Model(z_gen, valid)
+        self.generator_model.compile(optimizer=optimizer, loss='mse')
         
     def build_generator(self):
         latent_input = Input(shape=[latent_size])
