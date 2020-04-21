@@ -6,23 +6,23 @@ from functools import partial
 
 from keras.layers import *
 from keras.models import *
-from keras.datasets import mnist
+from keras.datasets import cifar10
 from keras.optimizers import RMSprop
 import keras.backend as K
 
-img_size = 64
-latent_size = 512
-batch_size = 16
+img_size = 32
+latent_size = 64
+batch_size = 32
 iterations = 50000
 
 assert log2(img_size).is_integer, 'input image size must be a power of 2'
 n_layers = int(log2(img_size))
 
-def noise(n, latent_size):
-    return np.random.normal(0.0, 1.0, size=[n, latent_size]).astype(float)
+def noise(batch_size, latent_size):
+    return np.random.normal(0.0, 1.0, size=[batch_size, latent_size]).astype(float)
 
-def noise_list(n, n_layers, latent_size):
-    return [noise(n, latent_size)] * n_layers
+def noise_list(batch_size, n_layers, latent_size):
+    return [noise(batch_size, latent_size)] * n_layers
 
 def random_weighted_average(imgs):
     alpha = K.random_uniform((32, 1, 1, 1))
@@ -167,7 +167,58 @@ class StyleGAN():
         
         return discriminator_model
     
-    
+    def train(self, epochs, batch_size, sample_interval=100):
+        (X_train, _), (_, _) = mnist.load_data()
         
+        X_train = (X_train.astype(np.float32) - 127.5) / 127.5
+        X_train = np.expand_dims(X_train, axis=3)
+        
+        valid = np.ones([batch_size, 1])
+        fake = np.zeros([batch_size, 1])
+        # dummy labels for gradient penalty
+        dummy = np.ones([batch_size, 1])
+        
+        for epoch in range(epochs):
+
+            # train discriminator
+            
+            # random sample of images
+            idx = np.random.randint(0, X_train.shape[0], batch_size)
+            imgs = X_train[idx]
+            # generator input
+            z = noise(batch_size, self.latent_size)
+            # train discriminator
+            d_loss = self.discriminator_model.train_on_batch([imgs, z], [valid, fake, dummy])
+            
+            # train generator
+            g_loss = self.generator_model.train_on_batch(z, valid)
+            
+            # plot 
+            print("{0} [Discriminator loss: {1}] [Generator loss: {2}]".format(epoch, d_loss[0], g_loss))
+            
+            if epoch % sample_interval == 0:
+                self.sample_images(epoch)
+    
+    def sample_images(self, epoch):
+        rows, cols = 5, 5
+        noise = np.random.normal(0, 1, (rows * cols, self.latent_dim))
+        gen_imgs = self.generator.predict(noise)
+
+        # Rescale images 0 - 1
+        gen_imgs = 0.5 * gen_imgs + 0.5
+
+        fig, axs = plt.subplots(rows, cols)
+        cnt = 0
+        for i in range(rows):
+            for j in range(cols):
+                axs[i,j].imshow(gen_imgs[cnt, :,:,0])
+                axs[i,j].axis('off')
+                cnt += 1
+        fig.savefig("images/mnist_%d.png" % epoch)
+        plt.close()
+        
+if __name__ == '__main__':
+    stylegan = StyleGAN()
+    stylegan.train(epochs=30000, batch_size=batch_size)
         
         
