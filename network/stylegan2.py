@@ -24,6 +24,10 @@ def noise(n, latent_size):
 def noise_list(n, n_layers, latent_size):
     return [noise(n, latent_size)] * n_layers
 
+def random_weighted_average(imgs):
+    alpha = K.random_uniform((32, 1, 1, 1))
+    return (alpha * imgs[0]) + ((1 - alpha) * imgs[1])
+    
 # mixing regularization
 def mixed_list(n, layers, latent_size):
     break_point = int(random() * layers)
@@ -77,23 +81,34 @@ class StyleGAN():
         self.img_size = img_size
         optimizer = RMSprop(lr=0.00005)
 
-        # build and compile the discriminator
-        self.discriminator = build_discriminator()
-        self.discriminator.compile(loss='mse', optimizer=optimizer, metrics=['accuracy'])
-        
-        # build the generator
+        # build generator and discriminator
         self.generator = self.build_generator()
+        self.discriminator = self.build_discriminator()
         
-        # the generator takes latent vector as input and generates images
-        z = Input([self.latent_size])
+        # freeze generator layers while training discriminator
+        self.generator.trainable = False
+        
+        # image input
+        real_img = Input(shape=self.img_size)
+        
+        # latent vector
+        z = Input(shape=self.latent_size)
+        # generate image using latent vector
         fake_img = self.generator(z)
         
-        # build the combined model by stacking generator and discriminator
-        # in the combined model only the generator updates
-        self.discriminator.trainable = False
-        valid = self.discriminator(fake_img)
-        self.combined = Model(z, valid)
-        self.combined.compile(loss='mse', optimizer=optimizer, metrics=['accuracy'])
+        # discriminator determines validity
+        fake = self.discriminator(fake_img)
+        valid = self.discriminator(real_img)
+        
+        # weighted average between real and fake
+        interpolated_img = random_weighted_average([real_img, fake_img])
+        valid_interpolated = self.discriminator(interpolated_img)
+        
+        partial_gp_loss = partial(gradient_penalty, averaged_samples=interpolated_img, weight=50)
+        partial_gp_loss.__name__ = 'gradient_penalty'
+        
+        self.discriminator = Model(inputs=[real_img, z], outputs=[valid, fake, valid_interpolated])
+        self.discriminator.compile(optimizer=optimizer, loss=['mse', 'mse', partial_gp_loss], loss_weights=[1, 1, 10])
         
         
     def build_generator(self):
