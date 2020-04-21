@@ -18,10 +18,6 @@ iterations = 50000
 assert log2(img_size).is_integer, 'input image size must be a power of 2'
 n_layers = int(log2(img_size))
 
-d_loss = []
-g_loss = []
-gp_loss = []
-
 def noise(n, latent_size):
     return np.random.normal(0.0, 1.0, size=[n, latent_size]).astype(float)
 
@@ -74,10 +70,12 @@ def d_block(inp_tensor, filters):
 
 class StyleGAN():
     
-    def __init__(self, steps=1, lr=0.0001, latent_size=latent_size, n_layers=n_layers):
+    def __init__(self, steps=1, lr=0.0001, latent_size=latent_size, n_layers=n_layers, img_size=img_size):
         self.latent_size = latent_size
         self.steps = 1
         self.lr = lr
+        self.n_layers = n_layers
+        self.img_size = img_size
         
     def build_generator(self):
         latent_input = Input(shape=[latent_size])
@@ -93,17 +91,28 @@ class StyleGAN():
         out = Dense(4*4*64, activation='relu')(inp)
         out = Reshape([4, 4, 64])(out)
         
-        # 4*4*64
         out = g_block(inp, latent, 64)
-        # 8*8*64
         out = g_block(inp, latent, 32)
-        # 16*16*32
         out = g_block(inp, latent, 32)
-        # 32*32*16
         out = g_block(inp, latent, 16)
-        # 64*64*8
         image_output = Conv2D(3, 1, padding='same', activation='sigmoid')(out)
         
         generator_model = Model(inputs=latent_input, outputs=image_output)
         
         return generator_model
+    
+    def build_discriminator(self):
+        image_input = Input(shape=[self.img_size, self.img_size, 3])
+        out = d_block(image_input, 16)
+        out = d_block(out, 32)
+        out = d_block(out, 64)
+        
+        out = Flatten()(out)
+        
+        out = Dense(128, kernel_initializer='he_normal', bias_initializer='zeros')(out)
+        out = LeakyReLU(alpha=0.02)(out)
+        out = Dropout(0.2)(out)
+        out = Dense(1, kernel_initializer='he_normal', bias_initializer='zeros')(out)
+        
+        discriminator_model = Model(inputs=image_input, outputs=out)
+        
