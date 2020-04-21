@@ -29,9 +29,8 @@ def mixed_list(n, layers, latent_size):
     break_point = int(random() * layers)
     return noise_list(n, break_point, latent_size) + noise_list(n, layers - break_point, latent_size)
 
-def gradient_penalty(img, sample, weight):
-    # imgs are true images while samples are generated images
-    gradients = K.gradients(img, sample)
+def gradient_penalty(real_img, fake_img, weight):
+    gradients = K.gradients(real_img, fake_img)
     gradient_sqr = K.square(gradients)
     gradients_sqr_sum = K.sum(gradients_sqr, axis=np.arange(1, len(gradients_sqr.shape)))
     return K.mean(gradients_sqr_sum)
@@ -76,6 +75,26 @@ class StyleGAN():
         self.lr = lr
         self.n_layers = n_layers
         self.img_size = img_size
+        optimizer = RMSprop(lr=0.00005)
+
+        # build and compile the discriminator
+        self.discriminator = build_discriminator()
+        self.discriminator.compile(loss='mse', optimizer=optimizer, metrics=['accuracy'])
+        
+        # build the generator
+        self.generator = self.build_generator()
+        
+        # the generator takes latent vector as input and generates images
+        z = Input([self.latent_size])
+        fake_img = self.generator(z)
+        
+        # build the combined model by stacking generator and discriminator
+        # in the combined model only the generator updates
+        self.discriminator.trainable = False
+        valid = self.discriminator(fake_img)
+        self.combined = Model(z, valid)
+        self.combined.compile(loss='mse', optimizer=optimizer, metrics=['accuracy'])
+        
         
     def build_generator(self):
         latent_input = Input(shape=[latent_size])
@@ -95,15 +114,15 @@ class StyleGAN():
         out = g_block(inp, latent, 32)
         out = g_block(inp, latent, 32)
         out = g_block(inp, latent, 16)
-        image_output = Conv2D(3, 1, padding='same', activation='sigmoid')(out)
+        img_output = Conv2D(3, 1, padding='same', activation='sigmoid')(out)
         
-        generator_model = Model(inputs=latent_input, outputs=image_output)
+        generator_model = Model(inputs=latent_input, outputs=img_output)
         
         return generator_model
     
     def build_discriminator(self):
-        image_input = Input(shape=[self.img_size, self.img_size, 3])
-        out = d_block(image_input, 16)
+        img_input = Input(shape=[self.img_size, self.img_size, 3])
+        out = d_block(img_input, 16)
         out = d_block(out, 32)
         out = d_block(out, 64)
         
@@ -114,5 +133,11 @@ class StyleGAN():
         out = Dropout(0.2)(out)
         out = Dense(1, kernel_initializer='he_normal', bias_initializer='zeros')(out)
         
-        discriminator_model = Model(inputs=image_input, outputs=out)
+        discriminator_model = Model(inputs=img_input, outputs=out)
+        
+        return discriminator_model
+    
+    
+        
+        
         
