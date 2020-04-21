@@ -3,7 +3,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from functools import partial
+from math import log2
 
+import tensorflow as tf
 from keras.layers import *
 from keras.models import *
 from keras.datasets import cifar10
@@ -33,7 +35,7 @@ def mixed_list(n, layers, latent_size):
     break_point = int(random() * layers)
     return noise_list(n, break_point, latent_size) + noise_list(n, layers - break_point, latent_size)
 
-def gradient_penalty(real_img, fake_img, weight):
+def gradient_penalty(real_img, fake_img, averaged_samples):
     gradients = K.gradients(real_img, fake_img)
     gradient_sqr = K.square(gradients)
     gradients_sqr_sum = K.sum(gradients_sqr, axis=np.arange(1, len(gradients_sqr.shape)))
@@ -46,8 +48,8 @@ def AdaIN(img):
     out = (img[0] - mean) / std
     
     pool_shape = [-1, 1, 1, out.shape[-1]]
-    scale = K.reshape(x[1], pool_shape)
-    bias = K.reshape(x[2], pool_shape)
+    scale = K.reshape(img[1], pool_shape)
+    bias = K.reshape(img[2], pool_shape)
     
     return out * scale + bias
 
@@ -55,19 +57,19 @@ def g_block(inp_tensor, latent_vector, filters):
     scale = Dense(filters)(latent_vector)
     bias = Dense(filters)(latent_vector)
     
-    out = UpSampling2D()(input_tensor)
+    out = UpSampling2D()(inp_tensor)
     out = Conv2D(filters, 3, padding='same')(out)
     out = Lambda(AdaIN)([out, scale, bias])
-    out = LeakyReLU(alpha=0.3)(out)
+    out = LeakyReLU(alpha=0.2)(out)
     
     return out
 
 def d_block(inp_tensor, filters):
     out = Conv2D(filters, 3, padding='same')(inp_tensor)
     out = LeakyReLU(alpha=0.2)(out)
-    out = Conv2D(filters, 3, padding='same')(out)
-    out = LeakyReLU(alpha=0.2)(out)
-    out = AveragePooling2D(out)
+    #out = Conv2D(filters, 3, padding='same')(out)
+    #out = LeakyReLU(alpha=0.2)(out)
+    out = AveragePooling2D()(out)
     
     return out
 
@@ -91,10 +93,10 @@ class StyleGAN():
         self.generator.trainable = False
         
         # image input
-        real_img = Input(shape=self.img_size)
+        real_img = Input([self.img_size, self.img_size, 3])
         
         # latent vector
-        z = Input(shape=self.latent_size)
+        z = Input([self.latent_size])
         # generate image using latent vector
         fake_img = self.generator(z)
         
@@ -106,11 +108,11 @@ class StyleGAN():
         interpolated_img = random_weighted_average([real_img, fake_img])
         valid_interpolated = self.discriminator(interpolated_img)
         
-        partial_gp_loss = partial(gradient_penalty, averaged_samples=interpolated_img, weight=50)
+        partial_gp_loss = partial(gradient_penalty, averaged_samples=real_img)
         partial_gp_loss.__name__ = 'gradient_penalty'
         
-        self.discriminator_model = Model(inputs=[real_img, z], outputs=[valid, fake, valid_interpolated])
-        self.discriminator_model.compile(optimizer=optimizer, loss=['mse', 'mse', partial_gp_loss], loss_weights=[1, 1, 10])
+        self.discriminator_model = Model(inputs=[real_img, z], outputs=[valid, fake, valid])
+        self.discriminator_model.compile(optimizer=optimizer, loss=['mse', 'mse', partial_gp_loss], loss_weights=[1,1,10])
         
         # Generator Computational Graph
         self.discriminator.trainable = False
@@ -137,13 +139,13 @@ class StyleGAN():
         latent = Dense(64)(latent)
         latent = LeakyReLU(alpha=0.2)(latent)
         
-        out = Dense(4*4*64, activation='relu')(inp)
+        out = Dense(4*4*64, activation='relu')(latent_input)
         out = Reshape([4, 4, 64])(out)
         
-        out = g_block(inp, latent, 64)
-        out = g_block(inp, latent, 32)
-        out = g_block(inp, latent, 32)
-        out = g_block(inp, latent, 16)
+        out = g_block(out, latent, 64)
+        out = g_block(out, latent, 32)
+        out = g_block(out, latent, 32)
+#        out = g_block(out, latent, 16)
         img_output = Conv2D(3, 1, padding='same', activation='sigmoid')(out)
         
         generator_model = Model(inputs=latent_input, outputs=img_output)
@@ -214,7 +216,7 @@ class StyleGAN():
                 axs[i,j].imshow(gen_imgs[cnt, :,:,0])
                 axs[i,j].axis('off')
                 cnt += 1
-        fig.savefig("images/mnist_%d.png" % epoch)
+        fig.savefig("images/cifar_%d.png" % epoch)
         plt.close()
         
 if __name__ == '__main__':
