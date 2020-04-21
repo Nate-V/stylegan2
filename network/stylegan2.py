@@ -10,7 +10,7 @@ from keras.datasets import mnist
 from keras.optimizers import RMSprop
 import keras.backend as K
 
-img_size = 1024
+img_size = 64
 latent_size = 512
 batch_size = 16
 iterations = 50000
@@ -40,6 +40,7 @@ def gradient_penalty(img, sample, weight):
     gradients_sqr_sum = K.sum(gradients_sqr, axis=np.arange(1, len(gradients_sqr.shape)))
     return K.mean(gradients_sqr_sum)
 
+# Adaptive Instance Normalization
 def AdaIN(img):
     mean = K.mean(img[0], axis=[0, 1], keepdims=True)
     std = K.std(img[0], axis=[0, 1], keepdims=True)
@@ -61,3 +62,48 @@ def g_block(inp_tensor, latent_vector, filters):
     out = LeakyReLU(alpha=0.3)(out)
     
     return out
+
+def d_block(inp_tensor, filters):
+    out = Conv2D(filters, 3, padding='same')(inp_tensor)
+    out = LeakyReLU(alpha=0.2)(out)
+    out = Conv2D(filters, 3, padding='same')(out)
+    out = LeakyReLU(alpha=0.2)(out)
+    out = AveragePooling2D(out)
+    
+    return out
+
+class StyleGAN():
+    
+    def __init__(self, steps=1, lr=0.0001, latent_size=latent_size, n_layers=n_layers):
+        self.latent_size = latent_size
+        self.steps = 1
+        self.lr = lr
+        
+    def build_generator(self):
+        latent_input = Input(shape=[latent_size])
+        
+        # latent mapping network
+        latent = Dense(64)(latent_input)
+        latent = LeakyReLU(alpha=0.2)(latent)
+        latent = Dense(64)(latent)
+        latent = LeakyReLU(alpha=0.2)(latent)
+        latent = Dense(64)(latent)
+        latent = LeakyReLU(alpha=0.2)(latent)
+        
+        out = Dense(4*4*64, activation='relu')(inp)
+        out = Reshape([4, 4, 64])(out)
+        
+        # 4*4*64
+        out = g_block(inp, latent, 64)
+        # 8*8*64
+        out = g_block(inp, latent, 32)
+        # 16*16*32
+        out = g_block(inp, latent, 32)
+        # 32*32*16
+        out = g_block(inp, latent, 16)
+        # 64*64*8
+        image_output = Conv2D(3, 1, padding='same', activation='sigmoid')(out)
+        
+        generator_model = Model(inputs=latent_input, outputs=image_output)
+        
+        return generator_model
