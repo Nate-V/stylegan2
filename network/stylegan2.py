@@ -198,11 +198,9 @@ class StyleGAN():
             
             # train generator
             g_loss = self.generator_model.train_on_batch(z, valid)
-            
-            # plot 
-            print("{0} [Discriminator loss: {1}] [Generator loss: {2}]".format(epoch, d_loss[0], g_loss))
-            
+                        
             if epoch % sample_interval == 0:
+                print("{0} [Discriminator loss: {1}] [Generator loss: {2}]".format(epoch, d_loss[0], g_loss))
                 self.sample_images(epoch)
     
     def sample_images(self, epoch):
@@ -225,6 +223,6 @@ class StyleGAN():
         
 if __name__ == '__main__':
     stylegan = StyleGAN()
-    stylegan.train(epochs=30000, batch_size=batch_size)
+    stylegan.train(epochs=50000, batch_size=batch_size)
         
         
