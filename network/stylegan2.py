@@ -121,7 +121,7 @@ class StyleGAN():
         # latent vector
         z_gen = Input([self.latent_size])
         # generate image based on vector
-        gen_img = self.generator(z)
+        gen_img = self.generator(z_gen)
         # discriminator determines validity
         valid = self.discriminator(gen_img)
         # define generator model
@@ -129,7 +129,7 @@ class StyleGAN():
         self.generator_model.compile(optimizer=optimizer, loss='mse')
         
     def build_generator(self):
-        latent_input = Input(shape=[latent_size])
+        latent_input = Input(shape=[self.latent_size])
         
         # latent mapping network
         latent = Dense(64)(latent_input)
@@ -142,20 +142,22 @@ class StyleGAN():
         out = Dense(4*4*32, activation='relu')(latent_input)
         out = Reshape([4, 4, 32])(out)
         
-#        out = g_block(out, latent, 64)
+        # out = g_block(out, latent, 64)
         out = g_block(out, latent, 32) 
         out = g_block(out, latent, 16) 
         out = g_block(out, latent, 8)
         img_output = Conv2D(3, 1, padding='same', activation='sigmoid')(out)
         
         generator_model = Model(inputs=latent_input, outputs=img_output)
+        print("Generator Model")
+        generator_model.summary()
         
         return generator_model
     
     def build_discriminator(self):
         img_input = Input(shape=[self.img_size, self.img_size, 3])
         out = d_block(img_input, 16)
-        out = d_block(out, 32)
+        out = d_block(img_input, 32)
         out = d_block(out, 64)
         
         out = Flatten()(out)
@@ -166,12 +168,13 @@ class StyleGAN():
         out = Dense(1, kernel_initializer='he_normal', bias_initializer='zeros')(out)
         
         discriminator_model = Model(inputs=img_input, outputs=out)
+        print("Discriminator Model")
         discriminator_model.summary()
         
         return discriminator_model
     
     def train(self, epochs, batch_size, sample_interval=100):
-        (X_train, _), (_, _) = mnist.load_data()
+        (X_train, _), (_, _) = cifar10.load_data()
         
         X_train = (X_train.astype(np.float32) - 127.5) / 127.5
         X_train = np.expand_dims(X_train, axis=3)
