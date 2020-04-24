@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 from functools import partial
@@ -9,7 +10,7 @@ import tensorflow as tf
 from keras.layers import *
 from keras.models import *
 from keras.datasets import cifar10
-from keras.optimizers import RMSprop
+from tensorflow.keras.optimizers import RMSprop
 import keras.backend as K
 
 img_size = 32
@@ -219,7 +220,7 @@ class StyleGAN():
                 axs[i,j].imshow(gen_imgs[cnt, :,:,0])
                 axs[i,j].axis('off')
                 cnt += 1
-        fig.savefig("images/cifar_%d.png" % epoch)
+        #fig.savefig("images/cifar_%d.png" % epoch)
         plt.close()
         
 if __name__ == '__main__':
