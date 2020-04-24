@@ -93,7 +93,7 @@ class StyleGAN():
         self.generator.trainable = False
         
         # image input
-        real_img = Input([self.img_size, self.img_size, 3])
+        real_img = Input([self.img_size, self.img_size, 3], name='real_image')
         
         # latent vector
         z = Input([self.latent_size])
@@ -149,8 +149,8 @@ class StyleGAN():
         img_output = Conv2D(3, 1, padding='same', activation='sigmoid')(out)
         
         generator_model = Model(inputs=latent_input, outputs=img_output)
-        print("Generator Model")
-        generator_model.summary()
+        #print("Generator Model")
+        #generator_model.summary()
         
         return generator_model
     
@@ -168,8 +168,8 @@ class StyleGAN():
         out = Dense(1, kernel_initializer='he_normal', bias_initializer='zeros')(out)
         
         discriminator_model = Model(inputs=img_input, outputs=out)
-        print("Discriminator Model")
-        discriminator_model.summary()
+        #print("Discriminator Model")
+        #discriminator_model.summary()
         
         return discriminator_model
     
@@ -177,7 +177,6 @@ class StyleGAN():
         (X_train, _), (_, _) = cifar10.load_data()
         
         X_train = (X_train.astype(np.float32) - 127.5) / 127.5
-        X_train = np.expand_dims(X_train, axis=3)
         
         valid = np.ones([batch_size, 1])
         fake = np.zeros([batch_size, 1])
@@ -191,7 +190,7 @@ class StyleGAN():
             # random sample of images
             idx = np.random.randint(0, X_train.shape[0], batch_size)
             imgs = X_train[idx]
-            # generator input
+            # generator input).
             z = noise(batch_size, self.latent_size)
             # train discriminator
             d_loss = self.discriminator_model.train_on_batch([imgs, z], [valid, fake, dummy])
@@ -207,7 +206,7 @@ class StyleGAN():
     
     def sample_images(self, epoch):
         rows, cols = 5, 5
-        noise = np.random.normal(0, 1, (rows * cols, self.latent_dim))
+        noise = np.random.normal(0, 1, (rows * cols, self.latent_size))
         gen_imgs = self.generator.predict(noise)
 
         # Rescale images 0 - 1
