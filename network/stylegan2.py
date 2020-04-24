@@ -13,7 +13,7 @@ from keras.optimizers import RMSprop
 import keras.backend as K
 
 img_size = 32
-latent_size = 64
+latent_size = 32
 batch_size = 32
 iterations = 50000
 
@@ -36,8 +36,8 @@ def mixed_list(n, layers, latent_size):
     return noise_list(n, break_point, latent_size) + noise_list(n, layers - break_point, latent_size)
 
 def gradient_penalty(real_img, fake_img, averaged_samples):
-    gradients = K.gradients(real_img, fake_img)
-    gradient_sqr = K.square(gradients)
+    gradients = K.gradients(fake_img, averaged_samples)[0]
+    gradients_sqr = K.square(gradients)
     gradients_sqr_sum = K.sum(gradients_sqr, axis=np.arange(1, len(gradients_sqr.shape)))
     return K.mean(gradients_sqr_sum)
 
@@ -109,7 +109,7 @@ class StyleGAN():
         valid_interpolated = self.discriminator(interpolated_img)
         
         partial_gp_loss = partial(gradient_penalty, averaged_samples=real_img)
-        partial_gp_loss.__name__ = 'gradient_penalty'
+        partial_gp_loss.__name__ = 'gradient_penalty_loss'
         
         self.discriminator_model = Model(inputs=[real_img, z], outputs=[valid, fake, valid])
         self.discriminator_model.compile(optimizer=optimizer, loss=['mse', 'mse', partial_gp_loss], loss_weights=[1,1,10])
@@ -119,7 +119,7 @@ class StyleGAN():
         self.generator.trainable = True
         
         # latent vector
-        z_gen = Input(shape=(self.latent_size))
+        z_gen = Input([self.latent_size])
         # generate image based on vector
         gen_img = self.generator(z)
         # discriminator determines validity
@@ -139,13 +139,13 @@ class StyleGAN():
         latent = Dense(64)(latent)
         latent = LeakyReLU(alpha=0.2)(latent)
         
-        out = Dense(4*4*64, activation='relu')(latent_input)
-        out = Reshape([4, 4, 64])(out)
+        out = Dense(4*4*32, activation='relu')(latent_input)
+        out = Reshape([4, 4, 32])(out)
         
-        out = g_block(out, latent, 64)
-        out = g_block(out, latent, 32)
-        out = g_block(out, latent, 32)
-#        out = g_block(out, latent, 16)
+#        out = g_block(out, latent, 64)
+        out = g_block(out, latent, 32) 
+        out = g_block(out, latent, 16) 
+        out = g_block(out, latent, 8)
         img_output = Conv2D(3, 1, padding='same', activation='sigmoid')(out)
         
         generator_model = Model(inputs=latent_input, outputs=img_output)
@@ -166,6 +166,7 @@ class StyleGAN():
         out = Dense(1, kernel_initializer='he_normal', bias_initializer='zeros')(out)
         
         discriminator_model = Model(inputs=img_input, outputs=out)
+        discriminator_model.summary()
         
         return discriminator_model
     
